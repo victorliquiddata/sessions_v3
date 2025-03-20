@@ -1,0 +1,369 @@
+import sqlite3
+import time
+import datetime
+import os
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.progress import Progress
+from rich.prompt import Prompt, Confirm
+
+# Initialize Rich console
+console = Console()
+
+
+def connect_to_db():
+    """Connect to the ESL database."""
+    try:
+        conn = sqlite3.connect("esl.db")
+        conn.row_factory = sqlite3.Row  # Enable column access by name
+        return conn
+    except sqlite3.Error as e:
+        console.print(f"[bold red]Database connection error: {e}[/bold red]")
+        exit(1)
+
+
+def get_student_info(conn, student_id):
+    """Get student information by ID."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, name, email, course_id 
+            FROM enrolled_students 
+            WHERE id = ?
+        """,
+            (student_id,),
+        )
+        student = cursor.fetchone()
+
+        if not student:
+            console.print(f"[bold red]No student found with ID {student_id}[/bold red]")
+            return None
+
+        # Get course information
+        cursor.execute(
+            """
+            SELECT id, name, focus
+            FROM courses
+            WHERE id = ?
+        """,
+            (student["course_id"],),
+        )
+        course = cursor.fetchone()
+
+        return {"student": dict(student), "course": dict(course) if course else None}
+    except sqlite3.Error as e:
+        console.print(f"[bold red]Error retrieving student information: {e}[/bold red]")
+        return None
+
+
+def get_lesson_info(conn, lesson_id):
+    """Get comprehensive lesson information by ID."""
+    try:
+        cursor = conn.cursor()
+
+        # Get lesson details
+        cursor.execute(
+            """
+            SELECT l.id, l.title, l.grammar_focus, l.vocabulary_focus, l.context,
+                   u.unit_number, u.title as unit_title, 
+                   c.id as course_id, c.name as course_name
+            FROM lessons l
+            JOIN units u ON l.unit_id = u.id
+            JOIN courses c ON u.course_id = c.id
+            WHERE l.id = ?
+        """,
+            (lesson_id,),
+        )
+        lesson = cursor.fetchone()
+
+        if not lesson:
+            console.print(f"[bold red]No lesson found with ID {lesson_id}[/bold red]")
+            return None
+
+        # Get vocabulary for the lesson
+        cursor.execute(
+            """
+            SELECT word_or_phrase, definition, example_usage
+            FROM vocabulary
+            WHERE lesson_id = ?
+        """,
+            (lesson_id,),
+        )
+        vocabulary = cursor.fetchall()
+
+        # Get grammar rules for the lesson
+        cursor.execute(
+            """
+            SELECT rule, example
+            FROM grammar_rules
+            WHERE lesson_id = ?
+        """,
+            (lesson_id,),
+        )
+        grammar_rules = cursor.fetchall()
+
+        # Get blocks for the lesson
+        cursor.execute(
+            """
+            SELECT id, title, description, activity_type, content
+            FROM blocks
+            WHERE lesson_id = ?
+            ORDER BY block_number
+        """,
+            (lesson_id,),
+        )
+        blocks = cursor.fetchall()
+
+        # Get resources for the lesson
+        cursor.execute(
+            """
+            SELECT resource_type, description, url_or_path
+            FROM resources
+            WHERE lesson_id = ?
+        """,
+            (lesson_id,),
+        )
+        resources = cursor.fetchall()
+
+        return {
+            "lesson": dict(lesson),
+            "vocabulary": [dict(v) for v in vocabulary],
+            "grammar_rules": [dict(g) for g in grammar_rules],
+            "blocks": [dict(b) for b in blocks],
+            "resources": [dict(r) for r in resources],
+        }
+    except sqlite3.Error as e:
+        console.print(f"[bold red]Error retrieving lesson information: {e}[/bold red]")
+        return None
+
+
+def get_student_lesson_record(conn, student_id, lesson_id):
+    """Get student's record for this specific lesson if it exists."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, completion_date, score, feedback
+            FROM lesson_records
+            WHERE student_id = ? AND lesson_id = ?
+        """,
+            (student_id, lesson_id),
+        )
+        record = cursor.fetchone()
+
+        if record:
+            # Get block records if they exist
+            cursor.execute(
+                """
+                SELECT br.id, br.student_speech_notes, br.teacher_notes, br.student_questions,
+                       b.title as block_title, b.activity_type
+                FROM block_records br
+                JOIN blocks b ON br.block_id = b.id
+                WHERE br.lesson_record_id = ?
+            """,
+                (record["id"],),
+            )
+            block_records = cursor.fetchall()
+
+            return {
+                "record": dict(record),
+                "block_records": [dict(br) for br in block_records],
+            }
+        return None
+    except sqlite3.Error as e:
+        console.print(f"[bold red]Error retrieving lesson record: {e}[/bold red]")
+        return None
+
+
+def generate_homework(student_info, lesson_info, lesson_record):
+    """Generate a personalized homework assignment based on lesson and student progress."""
+    student = student_info["student"]
+    course = student_info["course"]
+    lesson = lesson_info["lesson"]
+
+    # Build the homework content
+    homework = f"# 📚 Personalized Homework for {student['name']}\n\n"
+    homework += f"**Course:** {course['name']}\n"
+    homework += f"**Lesson:** {lesson['title']} (Unit {lesson['unit_number']}: {lesson['unit_title']})\n"
+    homework += f"**Date:** {datetime.datetime.now().strftime('%Y-%m-%d')}\n\n"
+
+    # Include lesson context
+    if lesson["context"]:
+        homework += f"## 🎯 Lesson Overview\n{lesson['context']}\n\n"
+
+    # Include feedback if available
+    if lesson_record and lesson_record["record"].get("feedback"):
+        homework += f"## 📝 Feedback from Your Last Class\n{lesson_record['record']['feedback']}\n\n"
+
+    # Include student speech notes if available
+    if lesson_record and lesson_record.get("block_records"):
+        homework += "## 🗣️ Your Speaking Notes\n"
+        for block in lesson_record["block_records"]:
+            if block["student_speech_notes"]:
+                homework += f"### Activity: {block['block_title']}\n"
+                homework += f"{block['student_speech_notes']}\n\n"
+
+                # Add dynamic practice recommendations based on activity type
+                activity_type = block["activity_type"].lower()
+                if activity_type == "speaking":
+                    homework += "**Practice recommendation:** Record yourself speaking about this topic for 3-5 minutes and listen for areas to improve.\n\n"
+                elif activity_type == "writing":
+                    homework += "**Practice recommendation:** Write a short paragraph expanding on this topic.\n\n"
+                elif activity_type == "reading":
+                    homework += "**Practice recommendation:** Read additional materials on this topic and summarize them.\n\n"
+                elif activity_type == "listening":
+                    homework += "**Practice recommendation:** Listen to a related audio resource and take notes.\n\n"
+                else:
+                    homework += "**Practice recommendation:** Review the topic and prepare questions for the next class.\n\n"
+
+    # Vocabulary review
+    if lesson_info["vocabulary"]:
+        homework += "## 📘 Vocabulary Review\n"
+        homework += "Practice using these words and phrases from our lesson:\n\n"
+        for item in lesson_info["vocabulary"]:
+            homework += f"- **{item['word_or_phrase']}**: {item['definition']}\n"
+            if item["example_usage"]:
+                homework += f"  Example: *{item['example_usage']}*\n"
+        homework += "\n"
+
+    # Grammar practice
+    if lesson_info["grammar_rules"]:
+        homework += "## 📖 Grammar Practice\n"
+        homework += f"Based on our focus on {lesson['grammar_focus']}, practice these rules:\n\n"
+        for rule in lesson_info["grammar_rules"]:
+            homework += f"- **Rule**: {rule['rule']}\n"
+            if rule["example"]:
+                homework += f"  Example: *{rule['example']}*\n"
+        homework += "\nCreate 3-5 original sentences using these grammar rules.\n\n"
+
+    # Structured activities based on blocks
+    if lesson_info["blocks"]:
+        homework += "## 📋 Structured Activities\n"
+        for block in lesson_info["blocks"]:
+            homework += f"### 🏡 {block['title']} ({block['activity_type']})\n"
+            homework += f"{block['description']}\n\n"
+            homework += f"**Task:** {block['content']}\n\n"
+
+    # Additional resources
+    if lesson_info["resources"]:
+        homework += "## 🔗 Additional Resources\n"
+        homework += "Use these resources to further practice what we've learned:\n\n"
+        for resource in lesson_info["resources"]:
+            homework += f"- **{resource['description']}** ({resource['resource_type']}): {resource['url_or_path']}\n"
+        homework += "\n"
+
+    # General practice suggestions
+    homework += "## ✅ General Practice\n"
+    homework += "1. Review the vocabulary and grammar points from this lesson.\n"
+    homework += "2. Practice using new vocabulary in conversations or writing.\n"
+    homework += (
+        "3. Complete any exercises from your workbook related to this material.\n"
+    )
+    homework += "4. Prepare questions about anything you find challenging for our next class.\n\n"
+
+    homework += f"Please bring your completed homework to our next class. If you have any questions, feel free to email me at [teacher@example.com].\n"
+
+    return homework
+
+
+def save_homework(homework, student_name, lesson_title):
+    """Save the homework to a text file in the 'homeworks' folder."""
+    # Create a safe filename
+    safe_filename = (
+        f"{student_name.replace(' ', '_')}_{lesson_title.replace(' ', '_')}_homework.md"
+    )
+
+    # Ensure the 'homeworks' directory exists
+    if not os.path.exists("homeworks"):
+        os.makedirs("homeworks")
+
+    # Define the full path for the file
+    file_path = os.path.join("homeworks", safe_filename)
+
+    try:
+        with open(file_path, "w", encoding="utf-8") as file:
+            file.write(homework)
+        console.print(f"\n[bold green]Homework saved to {file_path}[/bold green]")
+        return file_path
+    except Exception as e:
+        console.print(f"[bold red]Error saving homework: {e}[/bold red]")
+        return None
+
+
+def main():
+    conn = connect_to_db()
+
+    console.print(Panel.fit("ESL Database Homework Generator", style="bold blue"))
+    console.print("===============================\n")
+
+    # Get student ID
+    student_id = Prompt.ask("Enter student ID", console=console)
+    student_info = get_student_info(conn, student_id)
+
+    if not student_info:
+        conn.close()
+        return
+
+    console.print(f"\n[bold]Student:[/bold] {student_info['student']['name']}")
+    console.print(f"[bold]Course:[/bold] {student_info['course']['name']}")
+
+    # Get lesson ID
+    lesson_id = Prompt.ask("\nEnter lesson ID", console=console)
+    lesson_info = get_lesson_info(conn, lesson_id)
+
+    if not lesson_info:
+        conn.close()
+        return
+
+    # Check if this student's course matches the lesson's course
+    if student_info["course"]["id"] != lesson_info["lesson"]["course_id"]:
+        console.print(
+            f"[bold yellow]Warning: This lesson is not part of {student_info['student']['name']}'s current course.[/bold yellow]"
+        )
+        proceed = Confirm.ask(
+            "Do you want to proceed anyway?", default=False, console=console
+        )
+        if not proceed:
+            conn.close()
+            return
+
+    # Get student's record for this lesson if it exists
+    lesson_record = get_student_lesson_record(conn, student_id, lesson_id)
+
+    # Generate the homework
+    with Progress(console=console) as progress:
+        task = progress.add_task("[cyan]Generating homework...", total=100)
+        for _ in range(100):
+            progress.update(task, advance=1)
+            time.sleep(0.01)  # Simulate work being done
+
+    homework = generate_homework(student_info, lesson_info, lesson_record)
+
+    # Print a preview
+    console.print("\n[bold]----- Homework Preview -----[/bold]")
+    console.print(Markdown(f"{homework[:300]}..."))
+    console.print("--------------------------")
+
+    # Save to file
+    save_option = Confirm.ask("\nSave homework to file?", default=True, console=console)
+    if save_option:
+        filename = save_homework(
+            homework, student_info["student"]["name"], lesson_info["lesson"]["title"]
+        )
+        if filename:
+            print_option = Confirm.ask(
+                "Print full homework to console?", default=False, console=console
+            )
+            if print_option:
+                console.print(Markdown(homework))
+    else:
+        console.print(Markdown(homework))
+
+    conn.close()
+    console.print("\n[bold green]Program completed.[/bold green]")
+
+
+if __name__ == "__main__":
+    main()
