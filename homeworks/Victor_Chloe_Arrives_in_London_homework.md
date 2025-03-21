@@ -3,37 +3,38 @@
 **Course:** 3 | English with Chloe - Level A2.1
 
 **Lesson:** Chloe Arrives in London (Unit 1: Arrival & Settling In)
-**Date:** 2025-03-10
+**Date:** 2025-03-20
 
 ## 🎯 Lesson Overview
 Arrival and introductions
 
 ## 📝 Feedback from Your Last Class
-asfasd
+VAAAAAAAAAAAAAAAI
 
 ## 🗣️ Your Speaking Notes
 ### Activity: Warm-up
-I like London, it's perfect!
+Lesson Overview: Meeting New People - Warm-Up (5 minutes)
 
-**Practice recommendation:** Review the topic and prepare questions for the next class.
+Activity: Icebreaker - "Two Truths and a Lie"
 
-### Activity: Grammar
-dfgsdfgsfdg
+Teaching Notes:
 
-**Practice recommendation:** Review the topic and prepare questions for the next class.
+-   Explain the game: Each person shares three "facts" about themselves – two true, one false.  Others guess the lie.
+-   Model the game first: Share your own two truths and a lie to demonstrate.  Keep it light and engaging. Examples: "I once met a celebrity", "I can juggle", "I've lived in another country".
+-   Encourage participation:  Make it clear that all answers are acceptable and there's no right or wrong guess. Emphasize having fun.
+-   Keep it brief:  Five minutes is a short time.  Aim for 2-3 participants sharing if time is limited.  Adjust based on class size and student engagement.
+-   Adapt as needed:  If the student seems uncomfortable, offer simpler alternatives.  For instance, asking a simple "What's your favorite color?" or “What’s something you like to do in your free time?” can work as well.
 
-### Activity: Vocabulary
-sdfgsdfgsfdg
 
-**Practice recommendation:** Review the topic and prepare questions for the next class.
+Teacher-Student Interaction:
 
-### Activity: Activity
-asdfasfasdf
+[Teacher]:  "Let's play a game called 'Two Truths and a Lie'! I'll go first.  My three statements are: I love spicy food, I've climbed a mountain, and I can speak French.  Which one is the lie?"
 
-**Practice recommendation:** Review the topic and prepare questions for the next class.
+[Student]:  [Student guesses, e.g., "I think the lie is that you can speak French."]
 
-### Activity: Wrap-up
-I learned this and that
+[Teacher]: "Correct!  I wish I could speak French.  Now it's your turn! Think of two true things and one lie about yourself."
+
+[Student]: [Student shares their two truths and a lie]
 
 **Practice recommendation:** Review the topic and prepare questions for the next class.
 
@@ -100,4 +101,3 @@ Use these resources to further practice what we've learned:
 3. Complete any exercises from your workbook related to this material.
 4. Prepare questions about anything you find challenging for our next class.
 
-Please bring your completed homework to our next class. If you have any questions, feel free to email me at [teacher@example.com].

@@ -1,0 +1,1 @@
+pyinstaller --name esl_teacher --onefile --add-data ".env;." --add-data "student_manager_v100.py;." esl_teacher_cli_v1_22.py
